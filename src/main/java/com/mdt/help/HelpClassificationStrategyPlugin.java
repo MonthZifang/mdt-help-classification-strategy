@@ -113,19 +113,21 @@ public final class HelpClassificationStrategyPlugin extends Plugin {
     @Override
     public void registerServerCommands(final CommandHandler handler) {
         installHelpOverride(handler);
+        installModOverride(handler);
 
         handler.register("help-ui-reload", "重新加载 help 分类与备注配置。", args -> {
             try {
                 reloadFromDisk();
                 installHelpOverride(handler);
+                installModOverride(handler);
                 Log.info("MDT Help分类策略 已重载。version=@ pageSize=@ strategy=@", DISPLAY_VERSION, config.pageSize, config.strategy);
             } catch (IOException exception) {
                 Log.err("MDT Help分类策略 重载失败: @", exception.getMessage());
             }
         });
 
-        handler.register("help-ui-preview", "[section|plugin|command|page] [page]", "在后台预览 help 页面内容。", args -> {
-            printHelp(handler, args);
+        handler.register("help-ui-preview", "[help|mod|plugin] [page]", "在后台预览 help 页面内容。", args -> {
+            preview(handler, args);
         });
     }
 
@@ -136,70 +138,91 @@ public final class HelpClassificationStrategyPlugin extends Plugin {
 
     private void installHelpOverride(final CommandHandler handler) {
         handler.removeCommand("help");
-        handler.register("help", "[section|plugin|command|page] [page]", "显示分类后的后台 help。", args -> {
-            printHelp(handler, args);
+        handler.register("help", "[page]", "显示原版后台命令分页。", args -> {
+            printBuiltinPage(handler, args);
         });
     }
 
-    private void printHelp(CommandHandler handler, String[] args) {
-        List<Command> commands = snapshot(handler);
+    private void installModOverride(final CommandHandler handler) {
+        handler.removeCommand("mod");
+        handler.register("mod", "[plugin|page] [page]", "显示插件后台命令分页。", args -> {
+            printPluginPage(handler, args);
+        });
+    }
+
+    private void preview(CommandHandler handler, String[] args) {
         if (args.length == 0) {
-            printOverview(commands, 1);
+            printBuiltinPage(handler, new String[0]);
+            return;
+        }
+
+        String mode = args[0].trim().toLowerCase(Locale.ROOT);
+        if (mode.equals("mod") || mode.equals("plugin") || mode.equals("plugins")) {
+            if (args.length > 1) {
+                printPluginPage(handler, new String[] {args[1]});
+            } else {
+                printPluginPage(handler, new String[0]);
+            }
+            return;
+        }
+        if (mode.equals("help") || mode.equals("original")) {
+            if (args.length > 1) {
+                printBuiltinPage(handler, new String[] {args[1]});
+            } else {
+                printBuiltinPage(handler, new String[0]);
+            }
+            return;
+        }
+        printBuiltinPage(handler, args);
+    }
+
+    private void printBuiltinPage(CommandHandler handler, String[] args) {
+        List<Command> commands = filterBuiltin(snapshot(handler));
+        int page = args.length == 0 ? 1 : parsePage(args[0], 1);
+        Log.info("MDT Help分类策略 @ | 原版后台命令分页 | 每页 @ 条", DISPLAY_VERSION, config.pageSize);
+        Log.info("使用方式: help [页码]");
+        printCategory("原版后台命令", commands, page);
+    }
+
+    private void printPluginPage(CommandHandler handler, String[] args) {
+        List<Command> commands = snapshot(handler);
+        List<Command> pluginCommands = filterPlugin(commands);
+
+        if (args.length == 0) {
+            Log.info("MDT Help分类策略 @ | 插件后台命令分页 | 每页 @ 条", DISPLAY_VERSION, config.pageSize);
+            Log.info("使用方式: mod [页码] | mod <插件名> [页码]");
+            printCategory("插件后台命令", pluginCommands, 1);
             return;
         }
 
         String first = args[0].trim();
         if (first.isEmpty()) {
-            printOverview(commands, 1);
+            Log.info("MDT Help分类策略 @ | 插件后台命令分页 | 每页 @ 条", DISPLAY_VERSION, config.pageSize);
+            Log.info("使用方式: mod [页码] | mod <插件名> [页码]");
+            printCategory("插件后台命令", pluginCommands, 1);
             return;
         }
 
         if (isInteger(first)) {
-            printOverview(commands, parsePage(first, 1));
-            return;
-        }
-
-        String normalized = first.toLowerCase(Locale.ROOT);
-        if (matchesAny(normalized, "original", "native", "vanilla", "后台原版", "原版")) {
-            printCategory("原版后台命令", filterBuiltin(commands), parseOptionalPage(args, 1));
-            return;
-        }
-        if (matchesAny(normalized, "plugin", "plugins", "插件")) {
-            printCategory("插件后台命令", filterPlugin(commands), parseOptionalPage(args, 1));
-            return;
-        }
-        if (normalized.equals(config.allKeyword.toLowerCase(Locale.ROOT)) || matchesAny(normalized, "all", "全部")) {
-            printCategory("全部后台命令", commands, parseOptionalPage(args, 1));
-            return;
-        }
-
-        Command exact = findExactCommand(commands, first);
-        if (exact != null) {
-            printCommandDetails(exact);
+            Log.info("MDT Help分类策略 @ | 插件后台命令分页 | 每页 @ 条", DISPLAY_VERSION, config.pageSize);
+            Log.info("使用方式: mod [页码] | mod <插件名> [页码]");
+            printCategory("插件后台命令", pluginCommands, parsePage(first, 1));
             return;
         }
 
         PluginCommandGroup group = resolveGroup(first);
         if (group != null) {
-            List<Command> grouped = filterGroup(commands, group);
+            List<Command> grouped = filterGroup(pluginCommands, group);
             if (!grouped.isEmpty()) {
+                Log.info("MDT Help分类策略 @ | 插件独立分页 | @ | 每页 @ 条", DISPLAY_VERSION, group.displayName, config.pageSize);
+                Log.info("使用方式: mod @ [页码]", group.id);
                 printGroup(group, grouped, parseOptionalPage(args, 1));
                 return;
             }
         }
 
-        Log.info("未找到 help 目标: @", first);
-        printUsage(commands);
-    }
-
-    private void printOverview(List<Command> commands, int page) {
-        List<Command> builtin = filterBuiltin(commands);
-        List<Command> plugin = filterPlugin(commands);
-        Log.info("MDT Help分类策略 @ | 后台 help 已接管 | 市场兼容 @", DISPLAY_VERSION, MARKET_COMPATIBILITY_VERSION);
-        Log.info("使用方式: help [页码] | help original [页码] | help plugin [页码] | help all [页码] | help <插件名> | help <命令名>");
-        Log.info("分类策略=@ | 每页最大命令数=@", config.strategy, config.pageSize);
-        printCategory("原版后台命令", builtin, page);
-        printCategory("插件后台命令", plugin, page);
+        Log.info("未找到插件分页目标: @", first);
+        Log.info("可用方式: mod [页码] | mod <插件名> [页码]");
     }
 
     private void printCategory(String title, List<Command> commands, int page) {
@@ -236,33 +259,6 @@ public final class HelpClassificationStrategyPlugin extends Plugin {
     private void printGroup(PluginCommandGroup group, List<Command> commands, int page) {
         Log.info("==== 插件命令 | @ | @ ====", group.id, group.displayName);
         printCategory(group.displayName, commands, page);
-    }
-
-    private void printCommandDetails(Command command) {
-        Log.info("==== 命令详情 ====");
-        Log.info("命令=@", command.text);
-        Log.info("参数=@", command.paramText == null || command.paramText.isEmpty() ? "(无)" : command.paramText);
-        Log.info("说明=@", command.description == null || command.description.isEmpty() ? "(无描述)" : command.description);
-        Log.info("分类=@", isBuiltin(command) ? "原版后台命令" : "插件后台命令");
-        String note = builtinNote(command);
-        if (!note.isEmpty()) {
-            Log.info("中文备注=@", note);
-        }
-    }
-
-    private void printUsage(List<Command> commands) {
-        Log.info("可用帮助命令示例：");
-        Log.info("  help");
-        Log.info("  help 2");
-        Log.info("  help original 1");
-        Log.info("  help plugin 1");
-        Log.info("  help @ 1", config.allKeyword);
-        for (PluginCommandGroup group : PLUGIN_GROUPS) {
-            List<Command> matched = filterGroup(commands, group);
-            if (!matched.isEmpty()) {
-                Log.info("  help @", group.id);
-            }
-        }
     }
 
     private List<Command> snapshot(CommandHandler handler) {
@@ -316,15 +312,6 @@ public final class HelpClassificationStrategyPlugin extends Plugin {
         return note == null ? "" : note;
     }
 
-    private Command findExactCommand(List<Command> commands, String name) {
-        for (Command command : commands) {
-            if (command.text.equalsIgnoreCase(name)) {
-                return command;
-            }
-        }
-        return null;
-    }
-
     private PluginCommandGroup resolveGroup(String value) {
         String normalized = value.toLowerCase(Locale.ROOT);
         for (PluginCommandGroup group : PLUGIN_GROUPS) {
@@ -333,15 +320,6 @@ public final class HelpClassificationStrategyPlugin extends Plugin {
             }
         }
         return null;
-    }
-
-    private boolean matchesAny(String value, String... options) {
-        for (String option : options) {
-            if (value.equalsIgnoreCase(option)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private int parseOptionalPage(String[] args, int index) {
