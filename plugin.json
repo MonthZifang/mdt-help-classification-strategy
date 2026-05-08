@@ -1,0 +1,7 @@
+{
+  "name": "mdt-help-classification-strategy",
+  "author": "monthzifang",
+  "main": "com.mdt.help.HelpClassificationStrategyPlugin",
+  "description": "将注册到 help 的命令与原版命令区分开来，提供可交互分页页面，并支持原版命令汉化备注、插件分类与 `help 插件名` 快速查看。",
+  "version": "v1"
+}

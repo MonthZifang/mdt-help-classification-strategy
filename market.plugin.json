@@ -1,0 +1,22 @@
+{
+  "metadataVersion": 1,
+  "name": "mdt-help-classification-strategy",
+  "displayName": "MDT Help Classification Strategy",
+  "displayNameZh": "MDT Help分类策略",
+  "author": "monthzifang",
+  "description": "Separates native and plugin commands into interactive help pages with paging, filtering, and Chinese remarks.",
+  "descriptionZh": "将注册到 help 的命令与原版命令区分开来，提供可交互分页页面，并支持原版命令汉化备注、插件分类与 `help 插件名` 快速查看。",
+  "version": "v1",
+  "requiredMarketVersion": "v1",
+  "channel": "native",
+  "targets": [
+    "original"
+  ],
+  "downloadUrls": [
+    "https://raw.githubusercontent.com/MonthZifang/mdt-help-classification-strategy/main/dist/mdt-help-classification-strategy.jar",
+    "https://raw.githubusercontent.com/MonthZifang/mdt-help-classification-strategy/main/plugin.json"
+  ],
+  "dependencies": [],
+  "repositoryUrl": "https://github.com/MonthZifang/mdt-help-classification-strategy",
+  "entry": "com.mdt.help.HelpClassificationStrategyPlugin"
+}
